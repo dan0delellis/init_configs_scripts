@@ -1,0 +1,2 @@
+#exportfs -ra
+/var/local/nfs_root/jammy    10.0.0.0/8(rw,no_root_squash,async,insecure,no_subtree_check)
