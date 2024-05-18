@@ -1,0 +1,6 @@
+#START uncomment to allow pci passthrough
+#vfio
+#vfio_iommu_type1
+#vfio_pci
+#vfio_virqfd
+#END uncomment to allow pci passthrough
