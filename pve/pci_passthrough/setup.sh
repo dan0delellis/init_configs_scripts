@@ -31,8 +31,8 @@ echo "adding to $GRUB_DEF"
 sudo bash -c "cat $GIT$GRUB_DEF >> $GRUB_DEF"
 echo "uncomment relevant line, then execute update-grub for changes to take effect"
 
-sudo bash -c "echo \"#options vfio-pci ids=$IDS\" >> $MP_VFIO"
-sudo bash -c "echo \"#then execute update-initramfs -u\" >> $MP_VFIO"
+echo "#options vfio-pci ids=$IDS" >> $GIT$MP_VFIO
+echo "#then execute update-initramfs -u" >> $GIT$MP_VFIO
 
 for i in $MP_IUI $MP_KVM $MP_VFIO; do
 	echo "updating $i"
