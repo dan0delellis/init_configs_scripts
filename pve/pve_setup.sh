@@ -3,3 +3,4 @@ wget https://raw.githubusercontent.com/foundObjects/pve-nag-buster/635801f8291c8
 
 apt update; apt upgrade -y; apt install vim screen git wget curl -y
 EOF
+bash pve_setup.sh
