@@ -1,8 +1,17 @@
 #!/bin/bash
 
 #friendly warning
-for i in bXkgYnJvdGhlciBpbiBjaHJpc3QsCg== eW91IGFyZSBhYm91dCB0byBpbmplY3QgYW4K QVJCSVRSQVJZCg== Q09ERQo= RVhFQ1VUSU9OCg== RVhQTE9JVAo= aW50byB5b3VyIGxvY2FsIG5ldHdvcmsuCg== aGF2ZSB5b3UgbG9zdCB5b3VyIG1pbmQ/Cg== ;
-do
+warning=( 
+    "bXkgYnJvdGhlciBpbiBjaHJpc3QsCg=="
+    "eW91IGFyZSBhYm91dCB0byBpbmplY3QgYW4K" 
+    "QVJCSVRSQVJZCg==" 
+    "Q09ERQo=" 
+    "RVhFQ1VUSU9OCg==" 
+    "RVhQTE9JVAo=" 
+    "aW50byB5b3VyIGxvY2FsIG5ldHdvcmsuCg==" 
+    "aGF2ZSB5b3UgbG9zdCB5b3VyIG1pbmQ/Cg=="
+)
+for i in ${warning[*]} ; do
     base64 -d <<< $i
     sleep 0.5
 done
