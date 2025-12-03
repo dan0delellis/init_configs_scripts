@@ -9,4 +9,4 @@ curl -s https://dl.google.com/go/$VER.linux-$ARCH.tar.gz | sudo tar -C /usr/loca
 
 sudo rm -rf $TMP;
 grep -q '\/usr\/local\/go\/bin\/' <<< "$PATH" || echo 'export "PATH=$PATH:/usr/local/go/bin"' | sudo tee -a /etc/profile
-. /etc/profile
+echo 'export GOPROXY=direct' | sudo tee -a /etc/profile
