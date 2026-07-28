@@ -1,4 +1,4 @@
-set tabstop=4 shiftwidth=4
+set splitright
 set cursorline
 set cursorcolumn
 set list
