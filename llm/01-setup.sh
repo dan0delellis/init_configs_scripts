@@ -32,3 +32,7 @@ Signed-By: /etc/apt/keyrings/docker.asc
 EOF
 
 sudo apt update
+sudo apt install -y nvidia-driver firmware-misc-nonfree nvidia-cuda-toolkit nvidia-container-toolkit docker-ce docker-ce-cli containerd.io build-essential cmake git libcurl4-openssl-dev
+
+echo "@reboot root $(realpath 02-build.sh)" | sudo tee /etc/cron.d/build-after-boot
+echo "ready 2 reboot"
