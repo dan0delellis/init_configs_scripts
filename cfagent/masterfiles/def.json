@@ -1,0 +1,13 @@
+{
+	"variables": {
+		"default:def.acl": [
+			"10.0.0.0/8"
+		],
+		"default:def.control_server_allowconnects": [
+			"10.0.0.0/8"
+		],
+		"default:def.trustkeysfrom": [
+			"10.0.0.0/8"
+		]
+	}
+}
