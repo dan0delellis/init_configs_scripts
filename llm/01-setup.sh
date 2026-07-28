@@ -32,7 +32,17 @@ Signed-By: /etc/apt/keyrings/docker.asc
 EOF
 
 sudo apt update
-sudo apt install -y nvidia-driver firmware-misc-nonfree nvidia-cuda-toolkit nvidia-container-toolkit docker-ce docker-ce-cli containerd.io build-essential cmake git libcurl4-openssl-dev
+sudo apt install -y nvidia-driver firmware-misc-nonfree nvidia-cuda-toolkit nvidia-container-toolkit docker-ce docker-ce-cli containerd.io build-essential cmake git libcurl4-openssl-dev linux-headers-amd64
+
+#wait for networking
+for i in $(seq 1 60); do echo "attempt $i"; host github.com || sleep 1 && break; done
+
+# 4. Clone and compile llama.cpp locally targeting Compute Capability 7.5
+if [ ! -d "llama.cpp" ]; then
+    git -C /root clone https://github.com/ggml-org/llama.cpp.git
+else
+	git -C /root/llama.cpp pull -r
+fi
 
 echo "@reboot root $(realpath 02-build.sh)" | sudo tee /etc/cron.d/build-after-boot
 echo "ready 2 reboot"

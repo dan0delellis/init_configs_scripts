@@ -2,23 +2,15 @@
 # Redirect logs so you can inspect output later if running completely headless
 exec > /var/log/llama_setup_part2.log 2>&1
 
+set -e
 # 1. Clean up the cron entry immediately so it never loops
-rm -f /etc/cron.d/part2
+rm -f /etc/cron.d/build-after-boot
 
 # 2. Configure Docker to mount the live NVIDIA runtime
 nvidia-ctk runtime configure --runtime=docker
 systemctl restart docker
 
-#wait for networking
-for i in $(seq 1 60); do host github.com && break; done
-
-# 4. Clone and compile llama.cpp locally targeting Compute Capability 7.5
-if [ ! -d "llama.cpp" ]; then
-    git clone https://github.com/ggml-org/llama.cpp.git
-else
-	git -C llama.cpp pull -r
-fi
-cd llama.cpp
+cd /root/llama.cpp
 
 # Clean up any failed manual build attempts if the folder somehow existed
 rm -rf build
