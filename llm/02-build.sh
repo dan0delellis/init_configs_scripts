@@ -6,6 +6,13 @@ set -e
 # 1. Clean up the cron entry immediately so it never loops
 rm -f /etc/cron.d/build-after-boot
 
+if [[ $(modprobe nvidia) ]]; then
+	echo "nvidia module is loaded. we aer good 2 go"
+else
+	echo "nvidia module not loaded. shits broke, son"
+	exit 1
+fi
+
 # 2. Configure Docker to mount the live NVIDIA runtime
 nvidia-ctk runtime configure --runtime=docker
 systemctl restart docker
