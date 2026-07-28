@@ -9,6 +9,8 @@ rm -f /etc/cron.d/part2
 nvidia-ctk runtime configure --runtime=docker
 systemctl restart docker
 
+#wait for networking
+for i in $(seq 1 60); do host github.com && break; done
 
 # 4. Clone and compile llama.cpp locally targeting Compute Capability 7.5
 if [ ! -d "llama.cpp" ]; then
