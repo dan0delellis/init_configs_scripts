@@ -1,3 +1,4 @@
+# DISREGARD THE COMMENT IN /etc/modules about being obsolete. it lies
 #START uncomment to allow pci passthrough
 #vfio
 #vfio_iommu_type1
