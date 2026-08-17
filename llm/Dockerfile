@@ -27,13 +27,13 @@ ARG BINDIR="/work/bin"
 ## end of fetcher
 
 ## start build-sycl
-	FROM intel/oneapi-toolkit:2026.1.0-devel-ubuntu26.04  AS builder-sycl
+	FROM intel/oneapi-toolkit:2026.1.0-devel-ubuntu26.04 AS builder-sycl
 
 	ARG ARCH
 	ARG SOURCEDIR
 	ARG OUTDIR
 
-	RUN mkdir -p $OUTDIR/lib $OUTDIR/bin $SOURCEDIR
+	RUN mkdir -p $OUTDIR $SOURCEDIR
 
 	WORKDIR /work/source
 
@@ -41,53 +41,44 @@ ARG BINDIR="/work/bin"
 
 	COPY --from=fetcher /work/source /work/source
 
-	RUN bash -c " \
- unset CC CXX SYCL_ROOT FLAGS; \
- source /opt/intel/oneapi/setvars.sh --force; \
- cmake -B build-sycl \
-  -DGGML_SYCL=ON \
-  -DGGML_BACKEND_DL=ON \
-  -DGGML_NATIVE=OFF \
-  -DCMAKE_INSTALL_RPATH='\$ORIGIN/../lib;\$ORIGIN;/usr/local/lib' \
-  -DCMAKE_BUILD_WITH_INSTALL_RPATH=TRUE \
-  -DCMAKE_EXE_LINKER_FLAGS='-Wl,--disable-new-dtags' \
-  -DCMAKE_SHARED_LINKER_FLAGS='-Wl,--disable-new-dtags' \
-  -DCMAKE_C_COMPILER=icx \
-  -DCMAKE_CXX_COMPILER=icpx \
-  -DCMAKE_C_FLAGS=\"${ARCH}\" \
-  -DCMAKE_CXX_FLAGS=\"${ARCH}\" \
-  -DCMAKE_BUILD_TYPE=Release && \
- cmake --build build-sycl --config Release -j $(nproc) \
-"
+	RUN ( \
+	 unset CC CXX SYCL_ROOT FLAGS && \
+	 source /opt/intel/oneapi/setvars.sh --force && \
+	 cmake -B build-sycl \
+	   -DGGML_SYCL=ON \
+	   -DGGML_BACKEND_DL=ON \
+	   -DGGML_NATIVE=OFF \
+	   -DCMAKE_BUILD_WITH_INSTALL_RPATH=TRUE \
+	   -DCMAKE_INSTALL_RPATH="\$ORIGIN" \
+	   -DCMAKE_C_COMPILER=icx \
+	   -DCMAKE_CXX_COMPILER=icpx \
+	   -DCMAKE_C_FLAGS="-march=${TARGET_MARCH}" \
+	   -DCMAKE_CXX_FLAGS="-march=${TARGET_MARCH}" \
+	   -DCMAKE_BUILD_TYPE=Release && \
+	 cmake --build build-sycl --config Release -j $(nproc) \
+	)
+
 	# the llama.cpp devs do some spoony shit overriding what end users do
 	# this makes cmake --install copy binaries so some default path
 	# even if it was called with a specific install point
 
 	# find all compiled binaries and copy them to /work/output
-	RUN find build-sycl/bin/ -maxdepth 1 -type f ! -name "*.so*" -executable -exec cp -vP {} /work/output/bin \;
+	RUN find build-sycl/bin/ -maxdepth 1 -type f -exec cp -vP {} /work/output \;
 
 	# find all compiled/linked modules in the build directory and copy those too
-	RUN find build-sycl/ -name "*.so*" -exec cp -P {} /work/output/lib \;
+	RUN find build-sycl/ -name "*.so*" -exec cp -P {} /work/output \;
 
 	#intel keeps fucking around with module names and shit so we're gonna just brute force our way into finding dependencies
 
 	# might be worth exporting this to a script
-	# search for packages which provide files discovered in the output of: \
-	RUN dpkg -S \ #\
-		# reading every string in the compiled binaries \
-		$(strings /work/output/bin/* /work/output/lib/* \
-			# that ends in .so or .so.X \
-			| egrep '\.so(\..+)?$' \
-			# with duplicates filtered out \
-			| sort | uniq \
-	#where we ignore errors (ex: 'libllama.so' is not from a package)\
-	) 2>/dev/null \
-	# now remove lines that have more than one word (ex: 'replaced by...')\
-	| egrep -v '\s[^\s]+\s' \
-	# and print out just the package name \
-	| awk -F ":" {'print $1'} \
-	# and write the unique results to a tmpfile \
-	| sort  | uniq > /tmp/found_packages.txt
+	RUN dpkg -S \                              # search for packages which provide files discovered in the output of: \
+	 $(strings /work/output/* /work/output/* \  # reading every string in the compiled binaries \
+	  | egrep '\.so(\..+)?$' \                  # that ends in .so or .so.X \
+	  | sort | uniq \                           # with duplicates filtered out \
+	 ) 2>/dev/null \                            # ignore the errors from dpkg -S (ex: 'libllama.so' is not from a package) \
+	 | egrep -v '\s[^\s]+\s' \                 # remove lines that have more than one word (ex: 'replaced by...') \
+	 | awk -F ":" {'print $1'} \               # and print out just the package name \
+	 | sort  | uniq > /tmp/found_packages.txt  # and write the unique results to a tmpfile
 
 #end of build-sycl
 
@@ -97,7 +88,7 @@ ARG BINDIR="/work/bin"
 	ARG SOURCEDIR
 	ARG OUTDIR
 
-	RUN mkdir -p $OUTDIR/lib $OUTDIR/bin $SOURCEDIR
+	RUN mkdir -p $OUTDIR $SOURCEDIR
 
 	WORKDIR /work/source
 
@@ -120,18 +111,16 @@ ARG BINDIR="/work/bin"
 		-DGGML_VULKAN=ON \
 		-DGGML_BACKEND_DL=ON \
 		-DGGML_NATIVE=OFF \
-		-DCMAKE_INSTALL_RPATH="\$ORIGIN/../lib;\$ORIGIN;/usr/local/lib" \
+		-DCMAKE_INSTALL_RPATH="\$ORIGIN" \
 		-DCMAKE_BUILD_WITH_INSTALL_RPATH=TRUE \
-		-DCMAKE_EXE_LINKER_FLAGS='-Wl,--disable-new-dtags' \
-		-DCMAKE_SHARED_LINKER_FLAGS='-Wl,--disable-new-dtags' \
 		-DCMAKE_C_FLAGS="${ARCH}" \
 		-DCMAKE_CXX_FLAGS="${ARCH}" \
 		-DCMAKE_BUILD_TYPE=Release && \
 		cmake --build build-vulkan --config Release -j $(nproc)
 
-	RUN find build-vulkan/bin -maxdepth 1 -type f -executable ! -name "*.so" -exec cp -vP {} /work/output/bin/ \;
+	RUN find build-vulkan/bin -maxdepth 1 -type f -executable -exec cp -vP {} /work/output/ \;
 
-	RUN find build-vulkan -name "*.so*" -exec cp -vP {} /work/output/lib/ \;
+	RUN find build-vulkan -name "*.so*" -exec cp -vP {} /work/output/ \;
 
 #runtime guy
 	FROM ubuntu:26.04 as final
@@ -140,9 +129,9 @@ ARG BINDIR="/work/bin"
 	# install the intel repo
 	RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends wget gpg ca-certificates && \
 		wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
-		| gpg --dearmor | tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null && \
+			| gpg --dearmor | tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null && \
 		echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
-		| tee /etc/apt/sources.list.d/oneAPI.list && \
+			| tee /etc/apt/sources.list.d/oneAPI.list && \
 		apt-get update
 
 	# get the discovered packages
@@ -163,14 +152,12 @@ ARG BINDIR="/work/bin"
 	RUN chmod +x /app/bin/llama-wrapper
 
 	#make an env file so you don't need to source that script
-	RUN bash -c "source /opt/intel/oneapi/setvars.sh && printenv > /app/oneapi.env"
+	RUN bash -c "source /opt/intel/oneapi/setvars.sh && printenv | grep oneapi | sed 's/^/export /' > /app/oneapi.env"
 
 	# Copy isolated build output files
-	COPY --from=builder-sycl /work/output/bin /app/sycl/bin
-	COPY --from=builder-sycl /work/output/lib /app/sycl/lib
+	COPY --from=builder-sycl /work/output /app/sycl
 
-	COPY --from=builder-vulkan /work/output/bin /app/vulkan/bin
-	COPY --from=builder-vulkan /work/output/lib /app/vulkan/lib
+	COPY --from=builder-vulkan /work/output /app/vulkan
 
 	WORKDIR /app
 
