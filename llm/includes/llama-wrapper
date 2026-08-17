@@ -1,0 +1,45 @@
+#!/bin/sh
+# Default to sycl if LLAMA_BACKEND is not specified
+BACKEND="${LLAMA_BACKEND:-sycl}"
+
+DEFAULT_ARGS="--host 0.0.0.0 --port 8080 --flash-attn on --cache-type-k q4_0 --cache-type-v q4_0 --n-gpu-layers 99 --metrics"
+# Allow overriding backend via an explicit --backend flag
+set -x
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--backend)
+			BACKEND="$2"
+			shift 2
+			;;
+		*)
+		# Safely capture user arguments
+		USER_ARGS="$USER_ARGS $1"
+		shift 1
+		;;
+	esac
+done
+
+FINAL_ARGS="$DEFAULT_ARGS $USER_ARGS"
+
+case "$BACKEND" in
+	vulkan)
+		export LD_LIBRARY_PATH="/app/vulkan/lib"
+		exec /app/vulkan/bin/llama-server --device Vulkan0 $FINAL_ARGS
+		;;
+	sycl)
+		# Ensure Intel oneAPI runtime vars are active if launching SYCL
+		export LD_LIBRARY_PATH="/app/sycl/lib"
+		if [ -f /app/oneapi.env ]; then
+			echo "sourcing env file" >&2
+			. /app/oneapi.env;
+		elif [ -f /opt/intel/oneapi/setvars.sh ]; then
+			. /opt/intel/oneapi/setvars.sh --force
+		fi
+
+		exec /app/sycl/bin/llama-server --device Sycl0 $FINAL_ARGS
+		;;
+	*)
+		echo "Unknown backend: $BACKEND. Choose 'sycl' or 'vulkan'." >&2
+		exit 1
+		;;
+esac
