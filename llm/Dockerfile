@@ -33,7 +33,7 @@ ARG BINDIR="/work/bin"
 	ARG SOURCEDIR
 	ARG OUTDIR
 
-	RUN mkdir -p $OUTDIR $SOURCEDIR
+	RUN mkdir -p $OUTDIR/lib $OUTDIR/bin $SOURCEDIR
 
 	WORKDIR /work/source
 
@@ -48,7 +48,10 @@ ARG BINDIR="/work/bin"
   -DGGML_SYCL=ON \
   -DGGML_BACKEND_DL=ON \
   -DGGML_NATIVE=OFF \
-  -DCMAKE_INSTALL_RPATH=\"\\\$ORIGIN\" \
+  -DCMAKE_INSTALL_RPATH='\$ORIGIN/../lib;\$ORIGIN;/usr/local/lib' \
+  -DCMAKE_BUILD_WITH_INSTALL_RPATH=TRUE \
+  -DCMAKE_EXE_LINKER_FLAGS='-Wl,--disable-new-dtags' \
+  -DCMAKE_SHARED_LINKER_FLAGS='-Wl,--disable-new-dtags' \
   -DCMAKE_C_COMPILER=icx \
   -DCMAKE_CXX_COMPILER=icpx \
   -DCMAKE_C_FLAGS=\"${ARCH}\" \
@@ -61,18 +64,18 @@ ARG BINDIR="/work/bin"
 	# even if it was called with a specific install point
 
 	# find all compiled binaries and copy them to /work/output
-	RUN find build-sycl/bin/ -maxdepth 1 -type f -executable -exec cp -vP {} /work/output \;
+	RUN find build-sycl/bin/ -maxdepth 1 -type f ! -name "*.so*" -executable -exec cp -vP {} /work/output/bin \;
 
 	# find all compiled/linked modules in the build directory and copy those too
-	RUN find build-sycl/ -name "*.so*" -exec cp -P {} /work/output/ \;
+	RUN find build-sycl/ -name "*.so*" -exec cp -P {} /work/output/lib \;
 
 	#intel keeps fucking around with module names and shit so we're gonna just brute force our way into finding dependencies
 
 	# might be worth exporting this to a script
 	# search for packages which provide files discovered in the output of: \
 	RUN dpkg -S \ #\
-		# finding every readable string in the compiled binaries \
-		$(strings /work/output/* \
+		# reading every string in the compiled binaries \
+		$(strings /work/output/bin/* /work/output/lib/* \
 			# that ends in .so or .so.X \
 			| egrep '\.so(\..+)?$' \
 			# with duplicates filtered out \
@@ -89,48 +92,46 @@ ARG BINDIR="/work/bin"
 #end of build-sycl
 
 #build-vulkan
-FROM ubuntu:26.04 as builder-vulkan
-ARG ARCH
-ARG SOURCEDIR
-ARG OUTDIR
+	FROM ubuntu:26.04 as builder-vulkan
+	ARG ARCH
+	ARG SOURCEDIR
+	ARG OUTDIR
 
-RUN mkdir -p $OUTDIR $SOURCEDIR
+	RUN mkdir -p $OUTDIR/lib $OUTDIR/bin $SOURCEDIR
 
-WORKDIR /work/source
+	WORKDIR /work/source
 
-RUN apt-get update && apt-get install -y \
-	build-essential \
-	cmake \
-	curl \
-	git \
-	glslang-tools \
-	glslc \
-	jq \
-	libvulkan-dev \
-	pkg-config  \
-	spirv-headers \
-	vulkan-tools
+	RUN apt-get update && apt-get install -y \
+		build-essential \
+		cmake \
+		curl \
+		git \
+		glslang-tools \
+		glslc \
+		jq \
+		libvulkan-dev \
+		pkg-config  \
+		spirv-headers \
+		vulkan-tools
 
-COPY --from=fetcher /work/source /work/source
+	COPY --from=fetcher /work/source /work/source
 
-RUN cmake -B build-vulkan \
-    -DGGML_VULKAN=ON \
-    -DGGML_BACKEND_DL=ON \
-    -DGGML_NATIVE=OFF \
-    -DCMAKE_INSTALL_RPATH="\$ORIGIN" \
-    -DCMAKE_C_FLAGS="${ARCH}" \
-    -DCMAKE_CXX_FLAGS="${ARCH}" \
-    -DCMAKE_BUILD_TYPE=Release && \
+	RUN cmake -B build-vulkan \
+		-DGGML_VULKAN=ON \
+		-DGGML_BACKEND_DL=ON \
+		-DGGML_NATIVE=OFF \
+		-DCMAKE_INSTALL_RPATH="\$ORIGIN/../lib;\$ORIGIN;/usr/local/lib" \
+		-DCMAKE_BUILD_WITH_INSTALL_RPATH=TRUE \
+		-DCMAKE_EXE_LINKER_FLAGS='-Wl,--disable-new-dtags' \
+		-DCMAKE_SHARED_LINKER_FLAGS='-Wl,--disable-new-dtags' \
+		-DCMAKE_C_FLAGS="${ARCH}" \
+		-DCMAKE_CXX_FLAGS="${ARCH}" \
+		-DCMAKE_BUILD_TYPE=Release && \
+		cmake --build build-vulkan --config Release -j $(nproc)
 
-    cmake --build build-vulkan --config Release -j $(nproc)
+	RUN find build-vulkan/bin -maxdepth 1 -type f -executable ! -name "*.so" -exec cp -vP {} /work/output/bin/ \;
 
-RUN /work/source/build-vulkan/bin/llama-server --list-devices
-
-RUN find build-vulkan/bin -maxdepth 1 -type f -executable ! -name "*.so" -exec cp -vP {} /work/output/ \;
-
-RUN find build-vulkan -name "*.so*" -exec cp -vP {} /work/output/ \;
-
-RUN /work/output/llama-server --help
+	RUN find build-vulkan -name "*.so*" -exec cp -vP {} /work/output/lib/ \;
 
 #runtime guy
 	FROM ubuntu:26.04 as final
@@ -157,11 +158,21 @@ RUN /work/output/llama-server --help
 
 	RUN rm -rf /var/lib/apt/lists/*
 
-	# Copy isolated build output files
-	COPY --from=builder-sycl /work/output /app/sycl
+	#deploy wrapper script for easy backend swapping
+	ADD includes/llama-wrapper /app/bin/llama-wrapper
+	RUN chmod +x /app/bin/llama-wrapper
 
-	COPY --from=builder-vulkan /work/output /app/vulkan
+	#make an env file so you don't need to source that script
+	RUN bash -c "source /opt/intel/oneapi/setvars.sh && printenv > /app/oneapi.env"
+
+	# Copy isolated build output files
+	COPY --from=builder-sycl /work/output/bin /app/sycl/bin
+	COPY --from=builder-sycl /work/output/lib /app/sycl/lib
+
+	COPY --from=builder-vulkan /work/output/bin /app/vulkan/bin
+	COPY --from=builder-vulkan /work/output/lib /app/vulkan/lib
 
 	WORKDIR /app
+
 	CMD ["/bin/bash"]
 #end of runtime guy
