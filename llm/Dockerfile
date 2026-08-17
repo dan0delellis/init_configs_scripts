@@ -41,9 +41,9 @@ ARG BINDIR="/work/bin"
 
 	COPY --from=fetcher /work/source /work/source
 
-	RUN ( \
-	 unset CC CXX SYCL_ROOT FLAGS && \
-	 source /opt/intel/oneapi/setvars.sh --force && \
+	RUN ( set -a && \
+	 unset CC CXX SYCL_ROOT FLAGS SETVARS_COMPLETED && \
+	 . /opt/intel/oneapi/setvars.sh --force && \
 	 cmake -B build-sycl \
 	   -DGGML_SYCL=ON \
 	   -DGGML_BACKEND_DL=ON \
@@ -71,14 +71,20 @@ ARG BINDIR="/work/bin"
 	#intel keeps fucking around with module names and shit so we're gonna just brute force our way into finding dependencies
 
 	# might be worth exporting this to a script
-	RUN dpkg -S \                              # search for packages which provide files discovered in the output of: \
-	 $(strings /work/output/* /work/output/* \  # reading every string in the compiled binaries \
-	  | egrep '\.so(\..+)?$' \                  # that ends in .so or .so.X \
-	  | sort | uniq \                           # with duplicates filtered out \
-	 ) 2>/dev/null \                            # ignore the errors from dpkg -S (ex: 'libllama.so' is not from a package) \
-	 | egrep -v '\s[^\s]+\s' \                 # remove lines that have more than one word (ex: 'replaced by...') \
-	 | awk -F ":" {'print $1'} \               # and print out just the package name \
-	 | sort  | uniq > /tmp/found_packages.txt  # and write the unique results to a tmpfile
+	# search for packages which provide files discovered in the output of:
+	# reading every string in the compiled binaries
+	# that ends in .so or .so.X
+	# with duplicates filtered out
+	# ignore the errors from dpkg -S (ex: 'libllama.so' is not from a package)
+	# remove lines that have more than one word (ex: 'replaced by...')
+	# and print out just the package name
+	# and write the unique results to a tmpfile
+
+	RUN dpkg -S \
+	 $(strings /work/output/*  | egrep '\.so(\..+)?$' | sort | uniq ) 2>/dev/null \
+	 | awk -F ":" {'print $1'} | egrep -v '\s[^\s]+\s' | sort | uniq > /tmp/found_packages.txt
+
+	RUN test -s /tmp/found_packages.txt
 
 #end of build-sycl
 
@@ -126,12 +132,16 @@ ARG BINDIR="/work/bin"
 	FROM ubuntu:26.04 as final
 	ENV DEBIAN_FRONTEND=noninteractive
 
-	# install the intel repo
+	# install the intel repo and bleeding-edge mesa ppa
 	RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends wget gpg ca-certificates && \
 		wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
 			| gpg --dearmor | tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null && \
 		echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
 			| tee /etc/apt/sources.list.d/oneAPI.list && \
+		wget -qO- 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xeb8b81e14da65431d7504ea8f63f0f2b90935439' && \
+			| gpg --dearmor --output /etc/apt/keyrings/mesa.gpg && \
+		echo "deb [signed-by=/usr/share/keyrings/mesa.gpg] deb https://ppa.launchpadcontent.net/kisak/kisak-mesa/ubuntu resolute main " \
+			| tee /etc/apt/sources.list.d/mesa.list && \
 		apt-get update
 
 	# get the discovered packages
@@ -150,9 +160,6 @@ ARG BINDIR="/work/bin"
 	#deploy wrapper script for easy backend swapping
 	ADD includes/llama-wrapper /app/bin/llama-wrapper
 	RUN chmod +x /app/bin/llama-wrapper
-
-	#make an env file so you don't need to source that script
-	RUN bash -c "source /opt/intel/oneapi/setvars.sh && printenv | grep oneapi | sed 's/^/export /' > /app/oneapi.env"
 
 	# Copy isolated build output files
 	COPY --from=builder-sycl /work/output /app/sycl

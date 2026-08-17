@@ -24,19 +24,18 @@ FINAL_ARGS="$DEFAULT_ARGS $USER_ARGS"
 case "$BACKEND" in
 	vulkan)
 		export LD_LIBRARY_PATH="/app/vulkan/lib"
-		exec /app/vulkan/bin/llama-server --device Vulkan0 $FINAL_ARGS
+		exec /app/vulkan/llama-server --device Vulkan0 $FINAL_ARGS
 		;;
 	sycl)
 		# Ensure Intel oneAPI runtime vars are active if launching SYCL
 		export LD_LIBRARY_PATH="/app/sycl/lib"
-		if [ -f /app/oneapi.env ]; then
-			echo "sourcing env file" >&2
-			. /app/oneapi.env;
-		elif [ -f /opt/intel/oneapi/setvars.sh ]; then
-			. /opt/intel/oneapi/setvars.sh --force
+		if [ -f /opt/intel/oneapi/setvars.sh ]; then
+			( . /opt/intel/oneapi/setvars.sh --force && exec /app/sycl/llama-server --device Sycl0 $FINAL_ARGS )
+		else
+			echo "cannot use $BACKEND without /opt/intel/oneapi/setvars.sh" >&2
+			exit 1
 		fi
 
-		exec /app/sycl/bin/llama-server --device Sycl0 $FINAL_ARGS
 		;;
 	*)
 		echo "Unknown backend: $BACKEND. Choose 'sycl' or 'vulkan'." >&2
