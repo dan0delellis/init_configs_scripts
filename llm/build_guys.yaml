@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  vulkan-service:
+    image: dandelellis/custom-llama-general:latest
+    build:
+      context: .
+      target: runner-general
+
+  cuda-service:
+    image: dandelellis/custom-llama-cuda:latest
+    build:
+      context: .
+      target: runner-cuda
+    runtime: nvidia
