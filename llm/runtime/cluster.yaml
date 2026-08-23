@@ -2,7 +2,7 @@ version: "3.9"
 services:
  intel-vllm:
   image: vllm/vllm-openai-xpu:v0.27.0-x86_64
-  container_name: vllm
+  container_name: vllm-sycl
   devices:
    - /dev/dri:/dev/dri
   environment:
@@ -24,22 +24,18 @@ services:
    --max-model-len auto
    --gpu-memory-utilization 0.90
    --trust-remote-code
+
  nvidia-llama:
-  command: /app/cuda/llama-server
-    --model /models/qwen2.5-coder-7b-instruct-q5_k_m.gguf
-    --port 8080
-    --host 0.0.0.0
-    --metrics
-    --ctx-size 4096
-    --n-gpu-layers 99
   image: llama-cuda:20260820-1
-  container_name: llama
+  container_name: llama-cuda
   environment:
    - CUDA_VISIBLE_DEVICES=0
   volumes:
    - /mnt/clankers:/models
   ports:
    - "8080:8080"
+  ipc: host
+  restart: no
   deploy:
     resources:
       reservations:
@@ -48,5 +44,28 @@ services:
             capabilities: [gpu]
             device_ids:
               - nvidia.com/gpu=all
-  ipc: host
+  command: /app/cuda/llama-server
+    --model /models/qwen2.5-coder-7b-instruct-q5_k_m.gguf
+    --port 8080
+    --host 0.0.0.0
+    --metrics
+    --ctx-size 4096
+    --n-gpu-layers 99
+
+ open-webui:
+  image: openwebui/open-webui:latest-slim
+  container_name: open-webui
+  ports:
+    - "3000:8080"
+  volumes:
+    - open-webui-data:/app/backend/data
+  environment:
+    - OPENAI_API_BASE_URLS=http://vllm-sycl:8000/v1;http://llama-cuda:8080/v1
+    - OPENAI_API_KEYS=vllm-token-not-used;llamacpp-token-not-used
   restart: no
+  depends_on:
+    - intel-vllm
+    - nvidia-llama
+
+volumes:
+  open-webui-data:
