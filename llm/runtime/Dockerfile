@@ -1,15 +1,20 @@
-FROM dandelellis/custom-llama-herd:20260820-1 as artifacts
+ARG DEB_FE="noninteractive"
+ARG GUY="dandelellis/custom-llama-herd:20260820-1"
+FROM ${GUY} AS custom_llama_herd
 #cuda runtime guy
 	FROM nvidia/cuda:13.3.1-runtime-ubuntu26.04 AS runner-cuda
 
-	COPY --from=artifacts /app /app
+	ARG DEB_FE
+	RUN apt-get update && apt install -y libgomp1
+
+	COPY --from=custom_llama_herd /app /app
 # end cuda runtime guy
 #runtime guy
 	FROM ubuntu:26.04 as runner-general
 	ENV DEBIAN_FRONTEND=noninteractive
 
 	# Copy isolated build output files and any misc files that may be needed
-	COPY --from=artifacts /app /app
+	COPY --from=custom_llama_herd /app /app
 
 	#deploy wrapper script for easy backend swapping
 	ADD includes/llama-wrapper /app/bin/llama-wrapper

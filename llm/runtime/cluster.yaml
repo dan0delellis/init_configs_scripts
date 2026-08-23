@@ -1,0 +1,31 @@
+version: "3.9"
+services:
+  intel-vllm:
+    image: vllm/vllm-openai-xpu:v0.27.0-x86_64 
+    devices: 
+      - /dev/dri:/dev/dri
+    environment:
+      - DEVICE=xpu
+      - ONEAPI_DEVICE_SELECTOR=level_zero:0
+      - VLLM_CACHE_ROOT=/models/vllm
+    volumes:
+      - /dev/dri/by-path:/dev/dri/by-path
+      - /mnt/clankers:/models
+    ports:
+      - "8000:8000"
+    ipc: host
+    restart: no
+    command: RedHatAI/DeepSeek-R1-Distill-Qwen-32B-quantized.w4a16
+      --port 8000
+      --host 0.0.0.0
+      --download-dir /models
+      --kv-cache-dtype fp8
+      --max-model-len auto
+      --gpu-memory-utilization 0.90
+      --trust-remote-code
+#dandelellis/custom-llama-herd:20260820-1   49e5b4bc27c8        472MB          129MB        
+#llama-cuda:20260820-1                      c441fbc33623       4.97GB         1.88GB        
+#llama-general:20260820-1                   d01bb555d0ab       6.83GB         1.81GB        
+#openwebui/open-webui:latest-slim           f67aea542a85       6.52GB         1.56GB        
+#ubuntu:26.04                               2260313b31c8        160MB         45.3MB        
+#vllm/vllm-openai-xpu:v0.27.0-x86_64        deb491fc0257       20.7GB            5GB        
