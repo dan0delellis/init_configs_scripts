@@ -2,7 +2,7 @@
 # Default to sycl if LLAMA_BACKEND is not specified
 BACKEND="${LLAMA_BACKEND:-sycl}"
 
-DEFAULT_ARGS="--host 0.0.0.0 --port 8080 --flash-attn on --cache-type-k q4_0 --cache-type-v q4_0 --n-gpu-layers 99 --metrics"
+DEFAULT_ARGS="--host 0.0.0.0 --metrics"
 # Allow overriding backend via an explicit --backend flag
 set -x
 while [ $# -gt 0 ]; do
