@@ -1,39 +1,35 @@
 version: "3.9"
 services:
- intel-vllm:
-  image: vllm/vllm-openai-xpu:v0.27.0-x86_64
-  container_name: vllm-sycl
+ intel-gpu:
+  image: dandelellis/custom-llama-general:latest
+  container_name: intel
   devices:
    - /dev/dri:/dev/dri
-  environment:
-   - DEVICE=xpu
-   - ONEAPI_DEVICE_SELECTOR=level_zero:0
-   - VLLM_CACHE_ROOT=/models/vllm
   volumes:
    - /dev/dri/by-path:/dev/dri/by-path
    - /mnt/clankers:/models
   ports:
-   - "8000:8000"
+   - "8000:8080"
   ipc: host
   restart: no
-  command: RedHatAI/DeepSeek-R1-Distill-Qwen-32B-quantized.w4a16
-   --port 8000
-   --host 0.0.0.0
-   --download-dir /models
-   --kv-cache-dtype fp8
-   --max-model-len auto
-   --gpu-memory-utilization 0.90
-   --trust-remote-code
+  command: /app/bin/llama-wrapper
+    --port ${BIG_PORT:-8080}
+    --backend ${BIG_BACKEND:-sycl}
+    --model ${BIG_MODEL}
+    --ctx ${BIG_CONTEXT:-60000}
+    --cache-type-k ${BIG_CACHE_K:-q8_0}
+    --cache-type-v ${BIG_CACHE_V:-q4_0}
 
- nvidia-llama:
-  image: llama-cuda:20260820-1
-  container_name: llama-cuda
+ nvidia-gpu:
+  #image: llama-cuda:20260820-1
+  image: horker:latest
+  container_name: nvidia
   environment:
    - CUDA_VISIBLE_DEVICES=0
   volumes:
    - /mnt/clankers:/models
   ports:
-   - "8080:8080"
+   - "8001:8080"
   ipc: host
   restart: no
   deploy:
@@ -49,7 +45,7 @@ services:
     --port 8080
     --host 0.0.0.0
     --metrics
-    --ctx-size 4096
+    --ctx-size 8192
     --n-gpu-layers 99
 
  open-webui:
