@@ -1,5 +1,6 @@
 ARG DEB_FE="noninteractive"
-ARG GUY="dandelellis/custom-llama-herd:20260820-1"
+ARG GUY="dandelellis/custom-llama-herd:latest"
+
 FROM ${GUY} AS custom_llama_herd
 #cuda runtime guy
 	FROM nvidia/cuda:13.3.1-runtime-ubuntu26.04 AS runner-cuda
@@ -8,7 +9,10 @@ FROM ${GUY} AS custom_llama_herd
 	RUN apt-get update && apt install -y libgomp1
 
 	COPY --from=custom_llama_herd /app /app
+	ADD includes/llama-wrapper /app/bin/llama-wrapper
+	RUN chmod +x /app/bin/llama-wrapper
 # end cuda runtime guy
+
 #runtime guy
 	FROM ubuntu:26.04 as runner-general
 	ENV DEBIAN_FRONTEND=noninteractive
